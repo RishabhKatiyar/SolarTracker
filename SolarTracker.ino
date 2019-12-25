@@ -1,3 +1,6 @@
+/* Copyright (C) 2019 Mievo - All Rights Reserved
+ */
+
 //IN HARDWARE CIRCUIT --->  10(DIRECTION),11(STEP),12(ENABLE) IS CONNECTED TO TILT MOTOR DRIVER.//
 //IN HARDWARE CIRCUIT --->   2(DIRECTION), 3(STEP), 6(ENABLE) IS CONNECTED TO PAN MOTOR DRIVER.//
 #include <AccelStepper.h>
@@ -74,8 +77,6 @@ void loop()
   
   if(functionalLightConditions(topLeft, topRight, bottomLeft, bottomRight))
   {
-    timeElapsedSinceNotFunctionalLightConditions = 0;
-    
     //following "if" block will be executed when the system 
     //has executed a return procedure earlier or
     //is a fresh start
