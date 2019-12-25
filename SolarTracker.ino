@@ -155,33 +155,14 @@ void trackSun(int avgLeft, int avgRight, int avgTop, int avgBottom)
   
   if(avgLeft - avgRight > SensorThreshold)
   {
-    TiltDirection = AntiClockwise;
+    PanDirection = AntiClockwise;
     
-    //Start Motors
-    digitalWrite(TiltMotorEnable, LOW);
-  }
-  else if(avgRight - avgLeft > SensorThreshold)
-  {
-    TiltDirection = Clockwise;
-    //Start Motors
-    digitalWrite(TiltMotorEnable, LOW);
-  }
-  else
-  {
-    TiltDirection = 0;
-    //Shutdown Motors
-    digitalWrite(TiltMotorEnable, HIGH);
-  }
-  
-  if(avgTop - avgBottom > SensorThreshold)
-  {
-    PanDirection = Clockwise;
     //Start Motors
     digitalWrite(PanMotorEnable, LOW);
   }
-  else if(avgBottom - avgTop > SensorThreshold)
+  else if(avgRight - avgLeft > SensorThreshold)
   {
-    PanDirection = AntiClockwise;
+    PanDirection = Clockwise;
     //Start Motors
     digitalWrite(PanMotorEnable, LOW);
   }
@@ -190,6 +171,25 @@ void trackSun(int avgLeft, int avgRight, int avgTop, int avgBottom)
     PanDirection = 0;
     //Shutdown Motors
     digitalWrite(PanMotorEnable, HIGH);
+  }
+  
+  if(avgTop - avgBottom > SensorThreshold)
+  {
+    TiltDirection = Clockwise;
+    //Start Motors
+    digitalWrite(TiltMotorEnable, LOW);
+  }
+  else if(avgBottom - avgTop > SensorThreshold)
+  {
+    TiltDirection = AntiClockwise;
+    //Start Motors
+    digitalWrite(TiltMotorEnable, LOW);
+  }
+  else
+  {
+    TiltDirection = 0;
+    //Shutdown Motors
+    digitalWrite(TiltMotorEnable, HIGH);
   }
 
   //At this point respective motors will be switched on or off, (in case of off, motors won't respond to any further commands)
