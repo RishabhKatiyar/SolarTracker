@@ -1,29 +1,23 @@
 //IN HARDWARE CIRCUIT --->  10(DIRECTION),11(STEP),12(ENABLE) IS CONNECTED TO TILT MOTOR DRIVER.//
 //IN HARDWARE CIRCUIT --->   2(DIRECTION), 3(STEP), 6(ENABLE) IS CONNECTED TO PAN MOTOR DRIVER.//
-
-
 #include <AccelStepper.h>
-int i=0;
-
-#define MaxInt 50 //32767 this is for 9 hour
 
 //Setup - not configurable
 #define motorInterfaceType    1
+#define EastSensor            4  // East Hall sensor for Interrupt
+#define WestSensor            5  // West Hall sensor for Interrupt
 
-#define TiltMotorStepPin      3 //3 replaced by PanMotorStepPin
-#define TiltMotorDirectionPin 2//2  replaced by PanMotorDirectionPin
-#define TiltMotorEnable       6 //6 replaced by PanMotorEnable
+#define TiltMotorStepPin      11
+#define TiltMotorDirectionPin 10
+#define TiltMotorEnable       12
 
-#define PanMotorStepPin       11 // 11replaced by TiltMotorStepPin (5 pin replaced by 11 pin)
-#define PanMotorDirectionPin  10 // 10replaced by TiltMotorDirectionPin (4 pin replaced by 10 pin)
-#define PanMotorEnable        12 //12 replaced by TiltMotorEnable(7 pin replaced by 12 pin)
-
-#define EastSensor             4 // East Hall sensor for Interrupt
-
-#define WestSensor             5 // West Hall sensor for Interrupt
+#define PanMotorStepPin       3
+#define PanMotorDirectionPin  2
+#define PanMotorEnable        6
 
 
 //Cofigurable Max Speed, Current Speed and Number of steps motor rotates on getting one command
+#define TimeToWait            500        //32767 this is for 9 hour
 #define MaxSpeed              200
 #define CurrentSpeed          20
 #define PanMotorReturnSpeed   100
@@ -48,24 +42,24 @@ AccelStepper TiltStepperMotor =
 AccelStepper PanStepperMotor = 
   AccelStepper(motorInterfaceType, PanMotorStepPin, PanMotorDirectionPin);  //  replaced by TiltStepperMotor
 
-bool IsEastSideInterruptEngaged = false;
-bool IsWestSideInterruptEngaged = false;
+int EastSideInterrupt = 0;
+int WestSideInterrupt = 0;
 int timeElapsedSinceNotFunctionalLightConditions = 0;
 
 void setup() 
 {
-  
   PanStepperMotor.setMaxSpeed(MaxSpeed); 
   TiltStepperMotor.setMaxSpeed(MaxSpeed);  
+  
   Serial.begin(9600);
   analogReference(INTERNAL);
+  
   pinMode(EastSensor, INPUT);
   pinMode(WestSensor, INPUT);  
 }
+
 void loop() 
 { 
-  IsEastSideInterruptEngaged = digitalRead(EastSensor);
-  IsWestSideInterruptEngaged = digitalRead(WestSensor);
   int topLeft     = analogRead(A0);
   int topRight    = analogRead(A1);
   int bottomLeft  = analogRead(A2);
@@ -75,73 +69,37 @@ void loop()
   int avgRight    = (topRight   + bottomRight)  / 2;
   int avgTop      = (topLeft    + topRight)     / 2;
   int avgBottom   = (bottomLeft + bottomRight)  / 2;
-
-  SerialPrintSensorValues(avgLeft, avgRight, avgTop, avgBottom);
-   if(IsEastSideInterruptEngaged)
-{
-  i=1;  //timeElapsedSinceNotFunctionalLightConditions = 0;  
-  }
-  else
-  {
-    i=i;  //timeElapsedSinceNotFunctionalLightConditions = timeElapsedSinceNotFunctionalLightConditions;
-   }
-
-    if(IsWestSideInterruptEngaged)
-{
-    //timeElapsedSinceNotFunctionalLightConditions = 0;  
-  }
-  else
-  {
-      //timeElapsedSinceNotFunctionalLightConditions = timeElapsedSinceNotFunctionalLightConditions;
-   }
   
-   Serial.print("EastSensor = ");
-   Serial.println(IsEastSideInterruptEngaged); 
-  
-    Serial.print("WestSensor = ");
-    Serial.println(IsWestSideInterruptEngaged);
-
-    Serial.print("Time = ");
-   Serial.println(timeElapsedSinceNotFunctionalLightConditions);
-
-   Serial.print(" Anshul = ");
-   Serial.println(i);
-
+  SerialPrintSensorValues(topLeft, topRight, bottomLeft, bottomRight);
   
   if(functionalLightConditions(topLeft, topRight, bottomLeft, bottomRight))
   {
     timeElapsedSinceNotFunctionalLightConditions = 0;
-    i=0;
+    
     //following "if" block will be executed when the system 
     //has executed a return procedure earlier or
     //is a fresh start
-    if(IsEastSideInterruptEngaged == 1)
+    if(IsEastSideInterruptEngaged() == 1)
     {
-      IsEastSideInterruptEngaged = 0;
-      IsWestSideInterruptEngaged = 0;
-      timeElapsedSinceNotFunctionalLightConditions = 0; 
-      i=0;
-    }
-
-    else
-    {
-      
+      EastSideInterrupt = 0;
+      WestSideInterrupt = 0;
+      timeElapsedSinceNotFunctionalLightConditions = 0;
     }
     
-    if(IsWestSideInterruptEngaged == 0)
+    if(IsWestSideInterruptEngaged() == 0)
     {
       trackSun(avgLeft, avgRight, avgTop, avgBottom);
     }
-   else           //if(EastSideInterruptIsEngaged())
+    else     
     {
-      turnOffAllMotors();   //Need to do anything?
+      turnOffAllMotors();
     }
   }
   else //if(!functionalLightConditions(topLeft, topRight, bottomLeft, bottomRight))
   {
-    if(IsEnoughTimeElapsed()&& (i==0) && (IsEastSideInterruptEngaged == 0))
+    if(IsEnoughTimeElapsed() && IsEastSideInterruptEngaged() == 0)
     {
-      //start rotating pan motor till EastSideInterruptIsEngaged
+      //start rotating pan motor till East Side Interrupt is engaged
       executeReturnProcedure();
     }
     turnOffAllMotors();
@@ -153,13 +111,13 @@ bool functionalLightConditions(int topLeft, int topRight, int bottomLeft, int bo
   //lesser the values higher is the light intensity
   if(topLeft < FunctionalLightConditionValue && topRight < FunctionalLightConditionValue 
     && bottomLeft < FunctionalLightConditionValue && bottomRight < FunctionalLightConditionValue)
-  return true;
+    return true;
   return false;
 }
 
 bool IsEnoughTimeElapsed()
 {
-  if(timeElapsedSinceNotFunctionalLightConditions == MaxInt)
+  if(timeElapsedSinceNotFunctionalLightConditions == TimeToWait)
   {
     return true;
   }
@@ -167,38 +125,27 @@ bool IsEnoughTimeElapsed()
   return false;
 }
 
-bool WestSideInterruptIsEngaged()
+int IsWestSideInterruptEngaged()
 {
   //As the Pan Motor starts returning to east direction, we will no longer get the interrupt signal 
-  //but IsWestSideInterruptEngaged will remember if we got the sun set conditions earlier
-  //and this flag (IsWestSideInterruptEngaged) should be returned immidiately
-  if(WestSideInterruptIsEngaged)
-    return IsWestSideInterruptEngaged;
+  //but WestSideInterrupt will remember if we got the sun set conditions earlier
+  //and this flag (WestSideInterrupt) should be returned immidiately
+  if(WestSideInterrupt == 1)
+    return WestSideInterrupt;
     
-  //ToDo: Check if west side interrupt pin is set/engaged
-  //if set
-  //then 
-  //  IsWestSideInterruptEngaged = true;
-  //else
-  //  IsWestSideInterruptEngaged = false;
+   WestSideInterrupt = digitalRead(WestSensor);
   
-  return IsWestSideInterruptEngaged;
+  return WestSideInterrupt;
 }
 
-bool EastSideInterruptIsEngaged()
+int IsEastSideInterruptEngaged()
 {
-  if(IsEastSideInterruptEngaged)
- 
-    return IsEastSideInterruptEngaged;
-    
-  //ToDo: Check if east side interrupt pin is set/engaged
-  //if set
-  //then 
-  //  IsEastSideInterruptEngaged = true;
-  //else
-  //  IsEastSideInterruptEngaged = false;
+  if(EastSideInterrupt == 1)
+    return EastSideInterrupt;
   
-  return IsEastSideInterruptEngaged;
+  EastSideInterrupt = digitalRead(EastSensor);
+  
+  return EastSideInterrupt;
 }
 
 void trackSun(int avgLeft, int avgRight, int avgTop, int avgBottom)
@@ -216,7 +163,6 @@ void trackSun(int avgLeft, int avgRight, int avgTop, int avgBottom)
   else if(avgRight - avgLeft > SensorThreshold)
   {
     TiltDirection = Clockwise;
-    
     //Start Motors
     digitalWrite(TiltMotorEnable, LOW);
   }
@@ -287,17 +233,26 @@ void turnOffAllMotors()
   digitalWrite(PanMotorEnable, HIGH);
 }
 
-void SerialPrintSensorValues(int avgLeft, int avgRight, int avgTop, int avgBottom)
+void SerialPrintSensorValues(int topLeft, int topRight, int bottomLeft, int bottomRight)
 {
   Serial.println();
-  Serial.print("Avg Left = ");
-  Serial.print(avgLeft);
-  Serial.print("\t Avg Right = ");
-  Serial.print(avgRight);
-  Serial.print("\t Avg Top = ");
-  Serial.print(avgTop);
-  Serial.print("\t Avg Bottom = ");
-  Serial.print(avgBottom);
+  Serial.print("Top Left = ");
+  Serial.print(topLeft);
+  Serial.print("\t Top Right = ");
+  Serial.print(topRight);
+  Serial.print("\t Bottom Left = ");
+  Serial.print(bottomLeft);
+  Serial.print("\t Bottom Right = ");
+  Serial.print(bottomRight);
+
+  Serial.print("EastSensor = ");
+  Serial.println(EastSideInterrupt); 
+  
+  Serial.print("WestSensor = ");
+  Serial.println(WestSideInterrupt);
+  
+  Serial.print("Time = ");
+  Serial.println(timeElapsedSinceNotFunctionalLightConditions);
   
   /*
   Serial.println();
