@@ -1,29 +1,41 @@
-#include <AccelStepper.h>
+//IN HARDWARE CIRCUIT --->  10(DIRECTION),11(STEP),12(ENABLE) IS CONNECTED TO TILT MOTOR DRIVER.//
+//IN HARDWARE CIRCUIT --->   2(DIRECTION), 3(STEP), 6(ENABLE) IS CONNECTED TO PAN MOTOR DRIVER.//
 
-#define MaxInt 32767
+
+#include <AccelStepper.h>
+int i=0;
+
+#define MaxInt 50 //32767 this is for 9 hour
 
 //Setup - not configurable
 #define motorInterfaceType    1
 
-#define TiltMotorStepPin      3 // replaced by PanMotorStepPin
-#define TiltMotorDirectionPin 2 //  replaced by PanMotorDirectionPin
-#define TiltMotorEnable       6 // replaced by PanMotorEnable
+#define TiltMotorStepPin      3 //3 replaced by PanMotorStepPin
+#define TiltMotorDirectionPin 2//2  replaced by PanMotorDirectionPin
+#define TiltMotorEnable       6 //6 replaced by PanMotorEnable
 
-#define PanMotorStepPin       11   // replaced by TiltMotorStepPin (5 pin replaced by 11 pin)
-#define PanMotorDirectionPin  10  // replaced by TiltMotorDirectionPin (4 pin replaced by 10 pin)
-#define PanMotorEnable        12  // replaced by TiltMotorEnable(7 pin replaced by 12 pin)
+#define PanMotorStepPin       11 // 11replaced by TiltMotorStepPin (5 pin replaced by 11 pin)
+#define PanMotorDirectionPin  10 // 10replaced by TiltMotorDirectionPin (4 pin replaced by 10 pin)
+#define PanMotorEnable        12 //12 replaced by TiltMotorEnable(7 pin replaced by 12 pin)
+
+#define EastSensor             4 // East Hall sensor for Interrupt
+
+#define WestSensor             5 // West Hall sensor for Interrupt
+
 
 //Cofigurable Max Speed, Current Speed and Number of steps motor rotates on getting one command
 #define MaxSpeed              200
 #define CurrentSpeed          20
 #define PanMotorReturnSpeed   100
-#define NumbersOfStepsAtOnce  10
+#define NumbersOfStepsAtOnce  15
+
+
 #define PanMotorNumberOfStepsForReturn 200
 
 //Partially configurable, i.e. toggle 1 & -1 if complete system is rotating in opposite directions
-#define Clockwise                 1
+#define Clockwise                  1
 #define AntiClockwise             -1
-#define PanMotorReturnDirection   1
+#define PanMotorReturnDirection   -1
 
 //Configurable Sensor values
 #define SensorThreshold 3
@@ -42,15 +54,18 @@ int timeElapsedSinceNotFunctionalLightConditions = 0;
 
 void setup() 
 {
-  PanStepperMotor.setMaxSpeed(MaxSpeed); 
-  TiltStepperMotor.setMaxSpeed(MaxSpeed);
   
+  PanStepperMotor.setMaxSpeed(MaxSpeed); 
+  TiltStepperMotor.setMaxSpeed(MaxSpeed);  
   Serial.begin(9600);
   analogReference(INTERNAL);
+  pinMode(EastSensor, INPUT);
+  pinMode(WestSensor, INPUT);  
 }
-
 void loop() 
 { 
+  IsEastSideInterruptEngaged = digitalRead(EastSensor);
+  IsWestSideInterruptEngaged = digitalRead(WestSensor);
   int topLeft     = analogRead(A0);
   int topRight    = analogRead(A1);
   int bottomLeft  = analogRead(A2);
@@ -62,31 +77,69 @@ void loop()
   int avgBottom   = (bottomLeft + bottomRight)  / 2;
 
   SerialPrintSensorValues(avgLeft, avgRight, avgTop, avgBottom);
+   if(IsEastSideInterruptEngaged)
+{
+  i=1;  //timeElapsedSinceNotFunctionalLightConditions = 0;  
+  }
+  else
+  {
+    i=i;  //timeElapsedSinceNotFunctionalLightConditions = timeElapsedSinceNotFunctionalLightConditions;
+   }
+
+    if(IsWestSideInterruptEngaged)
+{
+    //timeElapsedSinceNotFunctionalLightConditions = 0;  
+  }
+  else
+  {
+      //timeElapsedSinceNotFunctionalLightConditions = timeElapsedSinceNotFunctionalLightConditions;
+   }
+  
+   Serial.print("EastSensor = ");
+   Serial.println(IsEastSideInterruptEngaged); 
+  
+    Serial.print("WestSensor = ");
+    Serial.println(IsWestSideInterruptEngaged);
+
+    Serial.print("Time = ");
+   Serial.println(timeElapsedSinceNotFunctionalLightConditions);
+
+   Serial.print(" Anshul = ");
+   Serial.println(i);
+
   
   if(functionalLightConditions(topLeft, topRight, bottomLeft, bottomRight))
   {
+    timeElapsedSinceNotFunctionalLightConditions = 0;
+    i=0;
     //following "if" block will be executed when the system 
     //has executed a return procedure earlier or
     //is a fresh start
-    if(IsEastSideInterruptEngaged = true)
+    if(IsEastSideInterruptEngaged == 1)
     {
-      IsEastSideInterruptEngaged = false;
-      IsWestSideInterruptEngaged = false;
-      timeElapsedSinceNotFunctionalLightConditions = 0;
+      IsEastSideInterruptEngaged = 0;
+      IsWestSideInterruptEngaged = 0;
+      timeElapsedSinceNotFunctionalLightConditions = 0; 
+      i=0;
+    }
+
+    else
+    {
+      
     }
     
-    if(!WestSideInterruptIsEngaged())
+    if(IsWestSideInterruptEngaged == 0)
     {
       trackSun(avgLeft, avgRight, avgTop, avgBottom);
     }
-    else if(EastSideInterruptIsEngaged())
+   else           //if(EastSideInterruptIsEngaged())
     {
-      //Need to do anything?
+      turnOffAllMotors();   //Need to do anything?
     }
   }
   else //if(!functionalLightConditions(topLeft, topRight, bottomLeft, bottomRight))
   {
-    if(IsEnoughTimeElapsed() && !EastSideInterruptIsEngaged())
+    if(IsEnoughTimeElapsed()&& (i==0) && (IsEastSideInterruptEngaged == 0))
     {
       //start rotating pan motor till EastSideInterruptIsEngaged
       executeReturnProcedure();
@@ -100,7 +153,7 @@ bool functionalLightConditions(int topLeft, int topRight, int bottomLeft, int bo
   //lesser the values higher is the light intensity
   if(topLeft < FunctionalLightConditionValue && topRight < FunctionalLightConditionValue 
     && bottomLeft < FunctionalLightConditionValue && bottomRight < FunctionalLightConditionValue)
-    return true;
+  return true;
   return false;
 }
 
@@ -122,7 +175,7 @@ bool WestSideInterruptIsEngaged()
   if(WestSideInterruptIsEngaged)
     return IsWestSideInterruptEngaged;
     
-  //ToDo: Check if west side interrrupt pin is set/engaged
+  //ToDo: Check if west side interrupt pin is set/engaged
   //if set
   //then 
   //  IsWestSideInterruptEngaged = true;
@@ -135,9 +188,10 @@ bool WestSideInterruptIsEngaged()
 bool EastSideInterruptIsEngaged()
 {
   if(IsEastSideInterruptEngaged)
+ 
     return IsEastSideInterruptEngaged;
     
-  //ToDo: Check if east side interrrupt pin is set/engaged
+  //ToDo: Check if east side interrupt pin is set/engaged
   //if set
   //then 
   //  IsEastSideInterruptEngaged = true;
